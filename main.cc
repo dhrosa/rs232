@@ -1,4 +1,7 @@
+#include <hardware/timer.h>
 #include <hardware/uart.h>
+#include <pico/bootrom.h>
+#include <pico/stdio/driver.h>
 #include <pico/stdlib.h>
 #include <pico/time.h>
 
@@ -23,7 +26,6 @@ constexpr std::array<CdcEndpoints, 2> endpoints = {{
 }};
 
 extern "C" const uint8_t* tud_descriptor_device_cb() {
-  std::cout << __PRETTY_FUNCTION__ << std::endl;
   static const tusb_desc_device_t descriptor = {
       .bLength = sizeof(tusb_desc_device_t),
       .bDescriptorType = TUSB_DESC_DEVICE,
@@ -49,7 +51,6 @@ extern "C" const uint8_t* tud_descriptor_device_cb() {
 }
 
 extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
-  std::cout << __PRETTY_FUNCTION__ << " index=" << int(index) << std::endl;
   // Each CDC interface needs two interfaces; control and data.
   constexpr int cdc_count = endpoints.size();
   constexpr int interface_count = cdc_count * 2;
@@ -94,8 +95,6 @@ std::array<uint16_t, 32> DescriptorString(std::string_view str) {
 
 extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
                                                     uint16_t langid) {
-  std::cout << __PRETTY_FUNCTION__ << " index=" << int(index)
-            << " langid=" << int(langid) << std::endl;
   static std::array<uint16_t, 32> storage;
   switch (index) {
     // Language
@@ -126,31 +125,27 @@ extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
   return storage.data();
 }
 
-extern "C" void tud_mount_cb() {
-  std::cout << __PRETTY_FUNCTION__ << std::endl;
+extern "C" void tud_cdc_line_coding_cb(uint8_t itf,
+                                       const cdc_line_coding_t* line_coding) {
+  if (line_coding->bit_rate == 1200) {
+    std::cout << "Resetting to bootloader." << std::endl;
+    reset_usb_boot(0, 0);
+  }
 }
 
-extern "C" void tud_unmount_cb() {
-  std::cout << __PRETTY_FUNCTION__ << std::endl;
-}
-
-extern "C" void tud_suspend_cb(bool remote_wakeup_enable) {
-  std::cout << __PRETTY_FUNCTION__ << std::endl;
-}
-
-extern "C" void tud_resume_cb() {
-  std::cout << __PRETTY_FUNCTION__ << std::endl;
+void cdc_task() {
+  for (int i = 0; i < 2; ++i) {
+    if (tud_cdc_n_available(i) == 0) {
+      continue;
+    }
+    const int value = tud_cdc_n_read_char(i);
+    std::cout << i << ": " << value << std::endl;
+  }
 }
 
 int main() {
-  stdio_uart_init_full(uart0, 115'200, 0, 1);
-  //  std::cout << "board_init()" << std::endl;
-  //  std::cout.flush();
-  // board_init();
-  std::cout << "Intentional sleep..." << std::endl;
-  sleep_ms(3000);
   tud_init(0);
-  std::cout << "tud_init() complete" << std::endl;
+  stdio_usb_init();
   while (true) {
     tud_task();
   }

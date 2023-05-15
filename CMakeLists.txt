@@ -24,13 +24,10 @@ target_link_libraries(
   tinyusb_board
   tinyusb_device
 )
-#target_compile_definitions(rs232 PUBLIC CFG_TUSB_DEBUG=2)
-pico_enable_stdio_usb(rs232 0)
-pico_enable_stdio_uart(rs232 1)
+pico_enable_stdio_usb(rs232 1)
+pico_enable_stdio_uart(rs232 0)
 
 pico_add_extra_outputs(rs232)
-
-
 
 
 add_executable(logger logger.cc)
