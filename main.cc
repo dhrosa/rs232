@@ -6,8 +6,11 @@
 #include <pico/time.h>
 
 #include <array>
+#include <iomanip>
 #include <iostream>
+#include <optional>
 #include <span>
+#include <sstream>
 #include <string_view>
 #include <vector>
 
@@ -133,20 +136,84 @@ extern "C" void tud_cdc_line_coding_cb(uint8_t itf,
   }
 }
 
-void cdc_task() {
-  for (int i = 0; i < 2; ++i) {
-    if (tud_cdc_n_available(i) == 0) {
+struct Device {
+  std::string name;
+
+  std::optional<char> (*read)();
+  void (*write)(char c);
+};
+
+std::array<Device, 2> devices{{
+    {
+        .name = "pc",
+        .read = []() -> std::optional<char> {
+          if (tud_cdc_n_available(1) > 0) {
+            return tud_cdc_n_read_char(1);
+          }
+          return std::nullopt;
+        },
+        .write = [](char c) { tud_cdc_n_write_char(1, c); },
+    },
+    {
+        .name = "motor",
+        .read = []() -> std::optional<char> {
+          if (uart_is_readable(uart0)) {
+            return uart_getc(uart0);
+          }
+          return std::nullopt;
+        },
+        .write = [](char c) { uart_putc(uart0, c); },
+    },
+}};
+
+Device& partner(const Device& device) {
+  if (&device == &devices[0]) {
+    return devices[1];
+  }
+  return devices[0];
+}
+
+int write_index = 0;
+
+void transfer() {
+  for (Device& device : devices) {
+    const std::optional<char> oc = device.read();
+    if (!oc) {
       continue;
     }
-    const int value = tud_cdc_n_read_char(i);
-    std::cout << i << ": " << value << std::endl;
+    const char c = *oc;
+
+    // Log the transfer
+    std::stringstream value_str;
+    value_str << "0x" << std::hex << std::setw(2) << std::setfill('0')
+              << std::uppercase << static_cast<int>(c);
+    std::cout << write_index << " " << device.name << ": " << value_str.view()
+              << std::endl;
+    ++write_index;
+
+    partner(device).write(c);
   }
 }
 
 int main() {
   tud_init(0);
   stdio_usb_init();
+  uart_init(uart0, 38'400);
+  gpio_set_function(0, GPIO_FUNC_UART);
+  gpio_set_function(1, GPIO_FUNC_UART);
+
+  // Additionally update TinyUSB in the background in-case main() is busy with a
+  // blocking operation.
+  repeating_timer_t timer;
+  add_repeating_timer_ms(
+      1,
+      [](repeating_timer_t*) {
+        tud_task();
+        return true;
+      },
+      nullptr, &timer);
   while (true) {
     tud_task();
+    transfer();
   }
 }
