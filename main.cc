@@ -107,16 +107,31 @@ extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
 }
 
 extern "C" void tud_cdc_line_coding_cb(uint8_t itf,
-                                       const cdc_line_coding_t* line_coding) {
-  if (line_coding->bit_rate == 1200) {
+                                       const cdc_line_coding_t* coding) {
+  std::cout << "CDC" << itf
+            << " line coding change: bit_rate=" << coding->bit_rate
+            << " stop_bits=" << static_cast<int>(coding->stop_bits)
+            << " parity=" << static_cast<int>(coding->parity)
+            << " data_bits=" << static_cast<int>(coding->data_bits)
+            << std::endl;
+  if (coding->bit_rate == 1200) {
     std::cout << "Resetting to bootloader." << std::endl;
     reset_usb_boot(0, 0);
   }
 }
 
+extern "C" void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
+  std::cout << "CDC" << itf << " line state change: dtr=" << dtr
+            << " rts=" << rts << std::endl;
+}
+
+extern "C" void tud_cdc_send_break_cb(uint8_t itf, uint16_t duration_ms) {
+  std::cout << "CDC" << itf << " break request: duration_ms=" << duration_ms
+            << std::endl;
+}
+
 struct Device {
   std::string name;
-
   std::optional<char> (*read)();
   void (*write)(char c);
 };
