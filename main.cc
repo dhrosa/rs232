@@ -6,6 +6,7 @@
 #include <pico/time.h>
 
 #include <array>
+#include <initializer_list>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -16,17 +17,6 @@
 
 #include "bsp/board.h"
 #include "tusb.h"
-
-struct CdcEndpoints {
-  uint8_t control;
-  uint8_t out;
-  uint8_t in;
-};
-
-constexpr std::array<CdcEndpoints, 2> endpoints = {{
-    {.control = 0x81, .out = 0x02, .in = 0x82},
-    {.control = 0x83, .out = 0x04, .in = 0x84},
-}};
 
 extern "C" const uint8_t* tud_descriptor_device_cb() {
   static const tusb_desc_device_t descriptor = {
@@ -54,25 +44,34 @@ extern "C" const uint8_t* tud_descriptor_device_cb() {
 }
 
 extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
-  // Each CDC interface needs two interfaces; control and data.
-  constexpr int cdc_count = endpoints.size();
-  constexpr int interface_count = cdc_count * 2;
-  constexpr uint16_t config_length =
-      TUD_CONFIG_DESC_LEN + cdc_count * TUD_CDC_DESC_LEN;
-
-  static const uint8_t configuration[] = {
-      // Config number, interface count, string index, total length, attribute,
-      // power in mA
-      TUD_CONFIG_DESCRIPTOR(1, interface_count, 0, config_length, 0x00, 100),
-      // Interface number, string index, EP notification address and size, EP
-      // data
-      // address (out, in) and size.
-      TUD_CDC_DESCRIPTOR(0, 4, endpoints[0].control, 8, endpoints[0].out,
-                         endpoints[0].in, 64),
-      TUD_CDC_DESCRIPTOR(2, 4, endpoints[1].control, 8, endpoints[1].out,
-                         endpoints[1].in, 64),
+  static std::vector<uint8_t> configuration;
+  auto append = [&](std::initializer_list<uint8_t> descriptor) {
+    configuration.insert(configuration.end(), descriptor);
   };
-  return configuration;
+
+  // Each CDC interface needs two interfaces; control (IN) and data (OUT and
+  // IN).
+  const std::array<std::array<uint8_t, 3>, 2> cdc_endpoints{{
+      {0x81, 0x02, 0x82},
+      {0x83, 0x04, 0x84},
+  }};
+  constexpr uint16_t config_length =
+      TUD_CONFIG_DESC_LEN + cdc_endpoints.size() * TUD_CDC_DESC_LEN;
+
+  // Config number, interface count, string index, total length, attribute,
+  // power in mA
+  append({TUD_CONFIG_DESCRIPTOR(1, 2 * cdc_endpoints.size(), 0, config_length,
+                                0x00, 100)});
+  uint8_t interface = 0;
+  for (const auto [ep_control, ep_out, ep_in] : cdc_endpoints) {
+    // Interface number, string index, EP notification address and size, EP
+    // data
+    // address (out, in) and size.
+    append(
+        {TUD_CDC_DESCRIPTOR(interface, 4, ep_control, 8, ep_out, ep_in, 64)});
+    interface += 2;
+  }
+  return configuration.data();
 }
 
 std::array<uint16_t, 32> DescriptorString(std::span<const uint16_t> str) {
