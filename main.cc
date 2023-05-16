@@ -145,7 +145,11 @@ std::array<Device, 2> devices{{
           }
           return std::nullopt;
         },
-        .write = [](char c) { tud_cdc_n_write_char(1, c); },
+        .write =
+            [](char c) {
+              tud_cdc_n_write_char(1, c);
+              tud_cdc_n_write_flush(1);
+            },
     },
     {
         .name = "motor",
