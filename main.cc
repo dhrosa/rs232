@@ -74,57 +74,36 @@ extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
   return configuration.data();
 }
 
-std::array<uint16_t, 32> DescriptorString(std::span<const uint16_t> str) {
-  std::array<uint16_t, 32> descriptor;
-  for (int i = 0; i < str.size(); ++i) {
-    descriptor[i + 1] = str[i];
+extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
+                                                    uint16_t langid) {
+  const std::array<std::span<const char>, 5> strings = {
+      // Language (English)
+      (const char[]){0x09, 0x04},
+      // Manufacturer
+      "DIY",
+      // Product
+      "RS232 bridge",
+      // Serial
+      "123456",
+      // CDC interface
+      "DIY CDC",
+  };
+  if (index >= strings.size()) {
+    return nullptr;
   }
+  const auto str = strings[index];
+  static std::array<uint16_t, 32> descriptor;
   // 16-bit header. First byte is the byte count (including the header). Second
   // byte is the string type.
   const uint16_t length = 2 * str.size() + 2;
   const uint16_t string_type = TUSB_DESC_STRING;
   descriptor[0] = (string_type << 8) | length;
-  return descriptor;
-}
-
-std::array<uint16_t, 32> DescriptorString(std::string_view str) {
-  std::vector<uint16_t> str16;
+  // Widen each 8-bit value to 16-bit.
+  uint16_t* c16 = &descriptor[1];
   for (char c : str) {
-    str16.push_back(c);
+    *(c16++) = c;
   }
-  return DescriptorString(str16);
-}
-
-extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
-                                                    uint16_t langid) {
-  static std::array<uint16_t, 32> storage;
-  switch (index) {
-    // Language
-    case 0: {
-      const uint16_t language_eng[] = {0x0409};
-      storage = DescriptorString(language_eng);
-      break;
-    }
-    case 1:
-      // Manufacturer
-      storage = DescriptorString("DIY");
-      break;
-    case 2:
-      // Product
-      storage = DescriptorString("RS232 bridge");
-      break;
-    case 3:
-      // Serial
-      storage = DescriptorString("123456");
-      break;
-    case 4:
-      // CDC interface
-      storage = DescriptorString("DIY CDC");
-      break;
-    default:
-      return nullptr;
-  }
-  return storage.data();
+  return descriptor.data();
 }
 
 extern "C" void tud_cdc_line_coding_cb(uint8_t itf,
