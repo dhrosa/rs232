@@ -12,7 +12,16 @@ include(pico_sdk_import.cmake)
 project(rs232 LANGUAGES C CXX)
 pico_sdk_init()
 
-add_executable(rs232 main.cc)
+include(FetchContent)
+FetchContent_Declare(fatfs
+  URL http://elm-chan.org/fsw/ff/arc/ff15.zip
+)
+FetchContent_MakeAvailable(fatfs)
+
+add_library(fatfs ${fatfs_SOURCE_DIR}/source/ff.c)
+target_include_directories(fatfs PUBLIC ${fatfs_SOURCE_DIR}/source)
+
+add_executable(rs232 main.cc fs.cc)
 target_include_directories(rs232 PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(
   rs232
@@ -23,6 +32,7 @@ target_link_libraries(
   pico_bootsel_via_double_reset
   tinyusb_board
   tinyusb_device
+  fatfs
 )
 pico_enable_stdio_usb(rs232 1)
 pico_enable_stdio_uart(rs232 0)

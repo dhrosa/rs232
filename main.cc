@@ -1,9 +1,11 @@
+#include <bsp/board.h>
 #include <hardware/timer.h>
 #include <hardware/uart.h>
 #include <pico/bootrom.h>
 #include <pico/stdio/driver.h>
 #include <pico/stdlib.h>
 #include <pico/time.h>
+#include <tusb.h>
 
 #include <array>
 #include <initializer_list>
@@ -15,8 +17,7 @@
 #include <string_view>
 #include <vector>
 
-#include "bsp/board.h"
-#include "tusb.h"
+#include "fs.h"
 
 extern "C" const uint8_t* tud_descriptor_device_cb() {
   static const tusb_desc_device_t descriptor = {
@@ -55,13 +56,13 @@ extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
       {0x81, 0x02, 0x82},
       {0x83, 0x04, 0x84},
   }};
-  constexpr uint16_t config_length =
-      TUD_CONFIG_DESC_LEN + cdc_endpoints.size() * TUD_CDC_DESC_LEN;
+  constexpr uint16_t config_length = TUD_CONFIG_DESC_LEN +
+                                     cdc_endpoints.size() * TUD_CDC_DESC_LEN +
+                                     TUD_MSC_DESC_LEN;
 
   // Config number, interface count, string index, total length, attribute,
   // power in mA
-  append({TUD_CONFIG_DESCRIPTOR(1, 2 * cdc_endpoints.size(), 0, config_length,
-                                0x00, 100)});
+  append({TUD_CONFIG_DESCRIPTOR(1, 5, 0, config_length, 0x00, 100)});
   uint8_t interface = 0;
   for (const auto [ep_control, ep_out, ep_in] : cdc_endpoints) {
     // Interface number, string index, EP notification address and size, EP
@@ -71,12 +72,18 @@ extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
         {TUD_CDC_DESCRIPTOR(interface, 4, ep_control, 8, ep_out, ep_in, 64)});
     interface += 2;
   }
+
+  // MSC endpoint.
+  ++interface;
+  // Interface number, string index, EP Out & EP In address, EP size
+  append({TUD_MSC_DESCRIPTOR(interface, 5, 0x5, 0x85, 64)});
+
   return configuration.data();
 }
 
 extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
                                                     uint16_t langid) {
-  const std::array<std::span<const char>, 5> strings = {
+  const std::array<std::span<const char>, 6> strings = {
       // Language (English)
       (const char[]){0x09, 0x04},
       // Manufacturer
@@ -87,6 +94,8 @@ extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
       "123456",
       // CDC interface
       "DIY CDC",
+      // MSC interface
+      "DIY MSC",
   };
   if (index >= strings.size()) {
     return nullptr;

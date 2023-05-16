@@ -12,6 +12,8 @@ extern "C" {
 #define CFG_TUD_CDC_RX_BUFSIZE 64
 #define CFG_TUD_CDC_TX_BUFSIZE 64
 
+#define CFG_TUD_MSC 1
+#define CFG_TUD_MSC_EP_BUFSIZE 64
 
 #ifdef __cplusplus
 }
