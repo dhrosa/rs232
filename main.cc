@@ -207,6 +207,7 @@ int main() {
   uart_init(uart0, 38'400);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);
+  FsInit();
 
   // Additionally update TinyUSB in the background in-case main() is busy with a
   // blocking operation.

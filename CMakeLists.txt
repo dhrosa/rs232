@@ -13,13 +13,16 @@ project(rs232 LANGUAGES C CXX)
 pico_sdk_init()
 
 include(FetchContent)
-FetchContent_Declare(fatfs
+FetchContent_Declare(fatfs_upstream
   URL http://elm-chan.org/fsw/ff/arc/ff15.zip
 )
-FetchContent_MakeAvailable(fatfs)
+FetchContent_MakeAvailable(fatfs_upstream)
+add_subdirectory(fatfs)
 
-add_library(fatfs ${fatfs_SOURCE_DIR}/source/ff.c)
-target_include_directories(fatfs PUBLIC ${fatfs_SOURCE_DIR}/source)
+
+# add_library(fatfs ${fatfs_SOURCE_DIR}/source/ff.c)
+# target_include_directories(fatfs PUBLIC ${fatfs_SOURCE_DIR}/source)
+
 
 add_executable(rs232 main.cc fs.cc)
 target_include_directories(rs232 PUBLIC ${CMAKE_CURRENT_LIST_DIR})
