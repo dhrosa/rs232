@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
-#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
@@ -20,17 +19,19 @@
 #include <string_view>
 
 namespace {
-std::string ToHex(std::integral auto value) {
+std::string ToHex(auto value) {
   std::stringstream ss;
   ss << std::setw(2) << std::setfill('0') << std::hex << "0x"
      << static_cast<int>(value);
   return ss.str();
 }
 
-constexpr int kSectorCount = 16;
+constexpr int kSectorCount = 256;
 constexpr int kSectorSize = 512;
 
-std::array<std::byte, kSectorCount * kSectorSize> disk;
+std::array<std::byte, kSectorCount * kSectorSize> disk = {};
+
+bool fs_initialized = false;
 }  // namespace
 
 ///////////////////////////
@@ -51,11 +52,11 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8],
   set(product_rev, "1.0");
 }
 
-bool tud_msc_test_unit_ready_cb(uint8_t lun) { return false; }
+bool tud_msc_test_unit_ready_cb(uint8_t lun) { return fs_initialized; }
 
 void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count,
                          uint16_t* block_size) {
-  *block_count = 16;
+  *block_count = kSectorCount;
   *block_size = kSectorSize;
 }
 
@@ -67,27 +68,41 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start,
 }
 
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
-                          void* buffer_start, uint32_t count) {
-  auto buffer = std::span(static_cast<uint8_t*>(buffer_start), count);
-  std::ranges::fill(buffer, 0);
+                          void* buffer, uint32_t count) {
+  const std::size_t start = lba * kSectorSize + offset;
+  const std::size_t end = start + count;
+  if (start >= disk.size() || end >= disk.size()) {
+    std::cout << "MSC read out of range read: start=" << start << " end=" << end
+              << std::endl;
+    return -1;
+  }
+  std::memcpy(buffer, disk.data() + start, count);
   return count;
 }
 
-bool tud_msc_is_writeable_cb(uint8_t lun) { return false; }
+bool tud_msc_is_writeable_cb(uint8_t lun) { return true; }
 
 int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                            uint8_t* buffer, uint32_t count) {
-  return -1;
+  const std::size_t start = lba * kSectorSize + offset;
+  const std::size_t end = start + count;
+  if (start >= disk.size() || end >= disk.size()) {
+    std::cout << "MSC read out of range write: start=" << start
+              << " end=" << end << std::endl;
+    return -1;
+  }
+  std::memcpy(disk.data() + start, buffer, count);
+  return count;
 }
 
 int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer,
                         uint16_t count) {
-  std::cout << "MSC SCSI command: " << ToHex(scsi_cmd[0]) << std::endl;
-  switch (scsi_cmd[0]) {
+  const uint8_t op = scsi_cmd[0];
+  switch (op) {
     case 0x1E:
       return 0;
     default:
-      std::cout << "Unsupported SCSI command." << std::endl;
+      std::cout << "Unsupported SCSI operation: 0x" << ToHex(op) << std::endl;
       return -1;
   }
 }
@@ -101,7 +116,6 @@ DSTATUS disk_initialize(BYTE drive) { return 0; }
 DSTATUS disk_status(BYTE drive) { return 0; }
 
 DRESULT disk_ioctl(BYTE drive, BYTE command, void* buffer) {
-  std::cout << "disk_ioctl: command=" << ToHex(command);
   switch (command) {
     case CTRL_SYNC:
       return RES_OK;
@@ -114,7 +128,8 @@ DRESULT disk_ioctl(BYTE drive, BYTE command, void* buffer) {
       return RES_OK;
     }
     default:
-      std::cout << "Unsupported ioctl command." << std::endl;
+      std::cout << "Unsupported disk_ioctl command:" << ToHex(command)
+                << std::endl;
       return RES_PARERR;
   }
   return RES_OK;
@@ -150,15 +165,60 @@ DWORD get_fattime() {
   return time.to_ulong();
 }
 
+PARTITION VolToPart[] = {
+    {.pd = 0, .pt = 1},
+};
+
 /////////
 // API //
 /////////
 
 namespace {
 FATFS fs;
+
 }  // namespace
 
 void FsInit() {
+  std::cout << "FAT file system initialization start." << std::endl;
+  const LBA_t partition_sizes[] = {kSectorCount};
   std::array<BYTE, kSectorSize> work_area;
-  f_mkfs("", nullptr, work_area.data(), work_area.size());
+  if (FRESULT result = f_fdisk(0, partition_sizes, work_area.data());
+      result != FR_OK) {
+    std::cout << "f_fdisk error: " << result << std::endl;
+    return;
+  }
+
+  if (FRESULT result = f_mkfs("", nullptr, work_area.data(), work_area.size());
+      result != FR_OK) {
+    std::cout << "f_mkfs error: " << result << std::endl;
+    return;
+  }
+
+  if (FRESULT result = f_mount(&fs, "", 1); result != FR_OK) {
+    std::cout << "f_mount error: " << result << std::endl;
+    return;
+  }
+
+  FIL file;
+  if (FRESULT result = f_open(&file, "/test.txt", FA_CREATE_NEW | FA_WRITE);
+      result != FR_OK) {
+    std::cout << "f_open error: " << result << std::endl;
+    return;
+  }
+
+  const std::string_view contents = "sup world";
+  UINT written;
+  if (FRESULT result =
+          f_write(&file, contents.data(), contents.size(), &written)) {
+    std::cout << "f_write error: " << result << std::endl;
+    return;
+  }
+
+  if (FRESULT result = f_close(&file)) {
+    std::cout << "f_close error: " << result << std::endl;
+    return;
+  }
+
+  std::cout << "FAT file system initialization complete." << std::endl;
+  fs_initialized = true;
 }

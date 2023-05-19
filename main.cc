@@ -62,7 +62,7 @@ extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
 
   // Config number, interface count, string index, total length, attribute,
   // power in mA
-  append({TUD_CONFIG_DESCRIPTOR(1, 5, 0, config_length, 0x00, 100)});
+  append({TUD_CONFIG_DESCRIPTOR(1, 6, 0, config_length, 0x00, 100)});
   uint8_t interface = 0;
   for (const auto [ep_control, ep_out, ep_in] : cdc_endpoints) {
     // Interface number, string index, EP notification address and size, EP
@@ -207,7 +207,6 @@ int main() {
   uart_init(uart0, 38'400);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);
-  FsInit();
 
   // Additionally update TinyUSB in the background in-case main() is busy with a
   // blocking operation.
@@ -219,7 +218,14 @@ int main() {
         return true;
       },
       nullptr, &timer);
+
+  const auto start_us = time_us_64();
+  bool fs_inited = false;
   while (true) {
+    if (!fs_inited && (time_us_64() - start_us > 5'000'000)) {
+      FsInit();
+      fs_inited = true;
+    }
     tud_task();
     transfer();
   }
