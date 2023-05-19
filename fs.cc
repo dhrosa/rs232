@@ -26,10 +26,44 @@ std::string ToHex(auto value) {
   return ss.str();
 }
 
-constexpr int kSectorCount = 256;
-constexpr int kSectorSize = 512;
+void LogSpan(std::ostream& s, std::span<const uint8_t> bytes) {
+  auto flags = s.flags();
+  s << std::hex << std::setfill('0');
+  for (int i = 0; i < bytes.size(); ++i) {
+    if (i % 32 == 0) {
+      s << "\n" << std::setw(4) << i << ": ";
+    }
+    if (i % 2 == 0) {
+      s << " ";
+    }
+    s << std::setw(2) << static_cast<int>(bytes[i]);
+  }
+  s << std::endl;
+  s.flags(flags);
+}
 
-std::array<std::byte, kSectorCount * kSectorSize> disk = {};
+constexpr int kSectorCount = 256;
+constexpr int kSectorSize = 4096;
+
+const std::span<const uint8_t> flash(reinterpret_cast<const uint8_t*>(XIP_BASE),
+                                     PICO_FLASH_SIZE_BYTES);
+
+const std::span<const uint8_t> disk = flash.last(kSectorCount * kSectorSize);
+
+struct InterruptBlocker {
+  InterruptBlocker() { saved = save_and_disable_interrupts(); }
+
+  ~InterruptBlocker() { restore_interrupts(saved); }
+
+  uint32_t saved;
+};
+
+void FlashWriteSector(const uint8_t* dest, const uint8_t* source) {
+  const uint32_t offset = dest - flash.data();
+  InterruptBlocker blocker;
+  flash_range_erase(offset, kSectorSize);
+  flash_range_program(offset, source, kSectorSize);
+}
 
 bool fs_initialized = false;
 }  // namespace
@@ -91,8 +125,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
               << " end=" << end << std::endl;
     return -1;
   }
-  std::memcpy(disk.data() + start, buffer, count);
-  return count;
+  return -1;
 }
 
 int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer,
@@ -145,14 +178,22 @@ DRESULT disk_read(BYTE drive, BYTE* buffer, LBA_t sector, UINT sector_count) {
   return RES_OK;
 }
 
-DRESULT disk_write(BYTE drive, const BYTE* buffer, LBA_t sector,
+DRESULT disk_write(BYTE drive, const BYTE* buffer, LBA_t start_sector,
                    UINT sector_count) {
-  if (sector < 0 || sector >= kSectorCount) {
-    std::cout << "disk_write invalid sector number: " << sector << std::endl;
+  if (start_sector < 0 || start_sector >= kSectorCount) {
+    std::cout << "disk_write invalid sector number: " << start_sector
+              << std::endl;
     return RES_PARERR;
   }
-  std::memcpy(disk.data() + sector * kSectorSize, buffer,
-              sector_count * kSectorSize);
+
+  const std::uint8_t* dest = disk.data() + start_sector * kSectorSize;
+  const std::uint8_t* source = buffer;
+  for (int i = start_sector; i < start_sector + sector_count; ++i) {
+    FlashWriteSector(dest, source);
+    dest += kSectorSize;
+    source += kSectorSize;
+  }
+
   return RES_OK;
 }
 
@@ -180,15 +221,15 @@ FATFS fs;
 
 void FsInit() {
   std::cout << "FAT file system initialization start." << std::endl;
-  const LBA_t partition_sizes[] = {kSectorCount};
+  const LBA_t partition_sizes[] = {kSectorCount - 5};
   std::array<BYTE, kSectorSize> work_area;
   if (FRESULT result = f_fdisk(0, partition_sizes, work_area.data());
       result != FR_OK) {
     std::cout << "f_fdisk error: " << result << std::endl;
     return;
   }
-
-  if (FRESULT result = f_mkfs("", nullptr, work_area.data(), work_area.size());
+  if (FRESULT result =
+          f_mkfs("0:", nullptr, work_area.data(), work_area.size());
       result != FR_OK) {
     std::cout << "f_mkfs error: " << result << std::endl;
     return;
