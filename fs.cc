@@ -306,7 +306,7 @@ FileSystem::FileSystem() {
   fs_initialized = true;
 }
 
-File File::Open(std::filesystem::path path, const OpenFlags& flags) {
+File FileSystem::OpenFile(std::filesystem::path path, const OpenFlags& flags) {
   BYTE mode;
   auto add_flag = [&](bool enable, BYTE flag) {
     if (enable) {
@@ -365,7 +365,7 @@ int File::Write(std::span<const std::byte> buffer) {
 
 void File::Sync() { ThrowIfError("sync", f_sync(fat_file_.get())); }
 
-Directory Directory::Open(std::filesystem::path path) {
+Directory FileSystem::OpenDirectory(std::filesystem::path path) {
   Directory dir;
   dir.fat_dir_ = std::make_unique<DIR>();
   ThrowIfError("opendir", f_opendir(dir.fat_dir_.get(), path.c_str()));
@@ -380,24 +380,19 @@ Directory::~Directory() {
   }
 }
 
-namespace {
-Directory::Entry ToEntry(const FILINFO& info) {
-  const std::string_view name = info.fname;
-  return {.path = std::string_view(info.fname),
-          .is_directory = static_cast<bool>(info.fattrib & AM_DIR)};
-}
-}  // namespace
-
 std::vector<Directory::Entry> Directory::Entries() {
   std::vector<Entry> entries;
-  FILINFO file_info;
+  FILINFO info;
   while (true) {
-    ThrowIfError("readdir", f_readdir(fat_dir_.get(), &file_info));
-    if (file_info.fname[0] == 0) {
+    ThrowIfError("readdir", f_readdir(fat_dir_.get(), &info));
+    const std::string_view path(info.fname);
+    if (path.empty()) {
       // End of directory.
       ThrowIfError("rewinddir", f_rewinddir(fat_dir_.get()));
       return entries;
     }
-    entries.push_back(ToEntry(file_info));
+    entries.push_back(
+        Entry{.path = path,
+              .is_directory = static_cast<bool>(info.fattrib & AM_DIR)});
   }
 }

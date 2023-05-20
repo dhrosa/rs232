@@ -7,16 +7,13 @@
 #include <span>
 #include <vector>
 
+class File;
+class Directory;
+
 class FileSystem {
  public:
   FileSystem();
 
- private:
-  FATFS fs_;
-};
-
-class File {
- public:
   // See http://elm-chan.org/fsw/ff/doc/open.html mode flags
   struct OpenFlags {
     bool read = false;
@@ -28,8 +25,15 @@ class File {
     bool open_append = false;
   };
 
-  static File Open(std::filesystem::path path, const OpenFlags& flags);
+  File OpenFile(std::filesystem::path path, const OpenFlags& flags);
+  Directory OpenDirectory(std::filesystem::path path);
 
+ private:
+  FATFS fs_;
+};
+
+class File {
+ public:
   ~File();
 
   File(File&& other) = default;
@@ -54,6 +58,7 @@ class File {
   void Sync();
 
  private:
+  friend class FileSystem;
   File() = default;
 
   std::unique_ptr<FIL> fat_file_;
@@ -61,7 +66,6 @@ class File {
 
 class Directory {
  public:
-  static Directory Open(std::filesystem::path path);
   ~Directory();
 
   Directory(Directory&&) = default;
@@ -75,6 +79,7 @@ class Directory {
   std::vector<Entry> Entries();
 
  private:
+  friend class FileSystem;
   Directory() = default;
   std::unique_ptr<DIR> fat_dir_;
 };
