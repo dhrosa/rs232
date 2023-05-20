@@ -6,6 +6,7 @@ set(BOARD pico_sdk)
 
 set(PICO_BOARD adafruit_feather_rp2040)
 set(PICO_SDK_FETCH_FROM_GIT on)
+set(PICO_CXX_ENABLE_EXCEPTIONS 1)
 
 include(pico_sdk_import.cmake)
 

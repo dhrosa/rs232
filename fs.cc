@@ -12,11 +12,15 @@
 #include <bitset>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <span>
 #include <sstream>
+#include <string>
 #include <string_view>
+#include <system_error>
+#include <utility>
 
 namespace {
 std::string ToHex(auto value) {
@@ -215,51 +219,120 @@ PARTITION VolToPart[] = {
 /////////
 
 namespace {
-FATFS fs;
-
+void ThrowIfError(FRESULT result) {
+  if (result == FR_OK) {
+    return;
+  }
+  std::stringstream what;
+  what << "FAT FS error: " << static_cast<int>(result);
+  throw std::filesystem::filesystem_error(
+      what.str(), std::make_error_code(std::errc::io_error));
+}
 }  // namespace
 
-void FsInit() {
+FileSystem::FileSystem() {
   std::cout << "FAT file system initialization start." << std::endl;
   const LBA_t partition_sizes[] = {kSectorCount - 5};
   std::array<BYTE, kSectorSize> work_area;
-  if (FRESULT result = f_fdisk(0, partition_sizes, work_area.data());
-      result != FR_OK) {
-    std::cout << "f_fdisk error: " << result << std::endl;
-    return;
-  }
-  if (FRESULT result =
-          f_mkfs("0:", nullptr, work_area.data(), work_area.size());
-      result != FR_OK) {
-    std::cout << "f_mkfs error: " << result << std::endl;
-    return;
-  }
-
-  if (FRESULT result = f_mount(&fs, "", 1); result != FR_OK) {
-    std::cout << "f_mount error: " << result << std::endl;
-    return;
-  }
-
-  FIL file;
-  if (FRESULT result = f_open(&file, "/test.txt", FA_CREATE_NEW | FA_WRITE);
-      result != FR_OK) {
-    std::cout << "f_open error: " << result << std::endl;
-    return;
-  }
-
-  const std::string_view contents = "sup world";
-  UINT written;
-  if (FRESULT result =
-          f_write(&file, contents.data(), contents.size(), &written)) {
-    std::cout << "f_write error: " << result << std::endl;
-    return;
-  }
-
-  if (FRESULT result = f_close(&file)) {
-    std::cout << "f_close error: " << result << std::endl;
-    return;
-  }
-
+  ThrowIfError(f_fdisk(0, partition_sizes, work_area.data()));
+  ThrowIfError(f_mkfs("0:", nullptr, work_area.data(), work_area.size()));
+  ThrowIfError(f_mount(&fs_, "", 1));
   std::cout << "FAT file system initialization complete." << std::endl;
   fs_initialized = true;
+}
+
+File File::Open(std::filesystem::path path, const OpenFlags& flags) {
+  BYTE mode;
+  auto add_flag = [&](bool enable, BYTE flag) {
+    if (enable) {
+      mode |= flag;
+    }
+  };
+
+  add_flag(flags.read, FA_READ);
+  add_flag(flags.write, FA_WRITE);
+  add_flag(flags.open_existing, FA_OPEN_EXISTING);
+  add_flag(flags.create_new, FA_CREATE_NEW);
+  add_flag(flags.create_always, FA_CREATE_ALWAYS);
+  add_flag(flags.open_always, FA_OPEN_ALWAYS);
+  add_flag(flags.open_append, FA_OPEN_APPEND);
+
+  File file;
+  file.fat_file_ = std::make_unique<FIL>();
+  ThrowIfError(f_open(file.fat_file_.get(), path.c_str(), mode));
+  return file;
+}
+
+File::~File() {
+  if (fat_file_ == nullptr) {
+    return;
+  }
+  try {
+    Close();
+  } catch (const std::filesystem::filesystem_error& e) {
+    std::cout << "Error while destructing file: " << e.what() << std::endl;
+  }
+}
+
+void File::Close() {
+  ThrowIfError(f_close(std::exchange(fat_file_, nullptr).get()));
+}
+
+int File::Tell() { return f_tell(fat_file_.get()); }
+
+void File::Seek(int location) {
+  ThrowIfError(f_lseek(fat_file_.get(), location));
+}
+
+std::span<std::byte> File::Read(std::span<std::byte> buffer) {
+  UINT bytes_read;
+  ThrowIfError(
+      f_read(fat_file_.get(), buffer.data(), buffer.size(), &bytes_read));
+  return buffer.subspan(bytes_read);
+}
+
+int File::Write(std::span<const std::byte> buffer) {
+  UINT bytes_written;
+  ThrowIfError(
+      f_write(fat_file_.get(), buffer.data(), buffer.size(), &bytes_written));
+  return bytes_written;
+}
+
+void File::Sync() { ThrowIfError(f_sync(fat_file_.get())); }
+
+Directory Directory::Open(std::filesystem::path path) {
+  Directory dir;
+  dir.fat_dir_ = std::make_unique<DIR>();
+  ThrowIfError(f_opendir(dir.fat_dir_.get(), path.c_str()));
+  return dir;
+}
+
+Directory::~Directory() {
+  try {
+    ThrowIfError(f_closedir(fat_dir_.get()));
+  } catch (const std::filesystem::filesystem_error& e) {
+    std::cout << "Error while closing directory: " << e.what() << std::endl;
+  }
+}
+
+namespace {
+Directory::Entry ToEntry(const FILINFO& info) {
+  const std::string_view name = info.fname;
+  return {.path = std::string_view(info.fname),
+          .is_directory = static_cast<bool>(info.fattrib & AM_DIR)};
+}
+}  // namespace
+
+std::vector<Directory::Entry> Directory::Entries() {
+  std::vector<Entry> entries;
+  FILINFO file_info;
+  while (true) {
+    ThrowIfError(f_readdir(fat_dir_.get(), &file_info));
+    if (file_info.fname[0] == 0) {
+      // End of directory.
+      ThrowIfError(f_rewinddir(fat_dir_.get()));
+      return entries;
+    }
+    entries.push_back(ToEntry(file_info));
+  }
 }

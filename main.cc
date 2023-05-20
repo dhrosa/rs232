@@ -220,11 +220,10 @@ int main() {
       nullptr, &timer);
 
   const auto start_us = time_us_64();
-  bool fs_inited = false;
+  std::optional<FileSystem> fs;
   while (true) {
-    if (!fs_inited && (time_us_64() - start_us > 5'000'000)) {
-      FsInit();
-      fs_inited = true;
+    if (!fs.has_value() && (time_us_64() - start_us > 5'000'000)) {
+      fs.emplace();
     }
     tud_task();
     transfer();
