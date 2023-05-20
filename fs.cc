@@ -281,16 +281,27 @@ void ThrowIfError(std::string_view op, FRESULT result) {
   throw std::filesystem::filesystem_error(what.str(),
                                           std::make_error_code(error.errc));
 }
-}  // namespace
 
-FileSystem::FileSystem() {
-  std::cout << "FAT file system initialization start." << std::endl;
+void CreateFileSystem() {
   const LBA_t partition_sizes[] = {kSectorCount - 5};
   std::array<BYTE, kSectorSize> work_area;
   ThrowIfError("fdisk", f_fdisk(0, partition_sizes, work_area.data()));
   ThrowIfError("mkfs",
                f_mkfs("0:", nullptr, work_area.data(), work_area.size()));
-  ThrowIfError("mount", f_mount(&fs_, "", 1));
+}
+}  // namespace
+
+FileSystem::FileSystem() {
+  std::cout << "FAT file system initialization start." << std::endl;
+  if (FRESULT result = f_mount(&fs_, "", 1); result == FR_NO_FILESYSTEM) {
+    std::cout << "No valid FAT filesystem found. Attempting to create it."
+              << std::endl;
+    CreateFileSystem();
+    ThrowIfError("mount", f_mount(&fs_, "", 1));
+  } else {
+    ThrowIfError("mount", result);
+    std::cout << "Reusing existing FAT filesystem." << std::endl;
+  }
   std::cout << "FAT file system initialization complete." << std::endl;
   fs_initialized = true;
 }
