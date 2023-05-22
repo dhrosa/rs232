@@ -4,9 +4,12 @@
 
 #include <array>
 #include <initializer_list>
+#include <list>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "cdc_device.h"
 
 class UsbDevice {
  public:
@@ -20,7 +23,7 @@ class UsbDevice {
   void SetProduct(std::string_view str);
   void SetSerialNumber(std::string_view str);
 
-  void AddCdc(std::string_view name);
+  CdcDevice& AddCdc(std::string_view name);
   void AddMsc(std::string_view name);
 
   std::vector<uint8_t> DeviceDescriptor();
@@ -45,4 +48,6 @@ class UsbDevice {
   uint8_t interface_count_ = 0;
   std::vector<uint8_t> config_descriptor_tail_;
   std::vector<std::string> strings_;
+  
+  std::list<CdcDevice> cdc_;
 };

@@ -1,6 +1,9 @@
 #include "usb_device.h"
 
+#include <pico/bootrom.h>
+
 #include <algorithm>
+#include <iostream>
 #include <iterator>
 #include <span>
 
@@ -31,6 +34,29 @@ const uint16_t* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     return nullptr;
   }
   return descriptor.data();
+}
+
+void tud_cdc_line_coding_cb(uint8_t itf, const cdc_line_coding_t* coding) {
+  std::cout << "CDC" << static_cast<int>(itf)
+            << " line coding change: bit_rate=" << coding->bit_rate
+            << " stop_bits=" << static_cast<int>(coding->stop_bits)
+            << " parity=" << static_cast<int>(coding->parity)
+            << " data_bits=" << static_cast<int>(coding->data_bits)
+            << std::endl;
+  if (coding->bit_rate == 1200) {
+    std::cout << "Resetting to bootloader." << std::endl;
+    reset_usb_boot(0, 0);
+  }
+}
+
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
+  std::cout << "CDC" << static_cast<int>(itf)
+            << " line state change: dtr=" << dtr << " rts=" << rts << std::endl;
+}
+
+void tud_cdc_send_break_cb(uint8_t itf, uint16_t duration_ms) {
+  std::cout << "CDC" << static_cast<int>(itf)
+            << " break request: duration_ms=" << duration_ms << std::endl;
 }
 
 UsbDevice::UsbDevice()
@@ -115,7 +141,7 @@ std::vector<uint16_t> UsbDevice::StringDescriptor(uint8_t index) {
   return descriptor;
 }
 
-void UsbDevice::AddCdc(std::string_view name) {
+CdcDevice& UsbDevice::AddCdc(std::string_view name) {
   const uint8_t string_index = AddString(name);
   const Interface control = AddInterface();
   const Interface data = AddInterface();
@@ -124,6 +150,8 @@ void UsbDevice::AddCdc(std::string_view name) {
   ConfigurationAppend({TUD_CDC_DESCRIPTOR(
       control.interface_number, string_index, control.endpoint_in, 8,
       data.endpoint_out, data.endpoint_in, 64)});
+
+  return cdc_.emplace_back(cdc_.size());
 }
 
 void UsbDevice::AddMsc(std::string_view name) {
