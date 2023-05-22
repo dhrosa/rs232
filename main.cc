@@ -113,6 +113,9 @@ int main() {
       .write = [](char c) { uart_putc(uart0, c); },
   };
 
+  FlashDisk disk(256);
+  FileSystem fs(disk);
+
   // Additionally update TinyUSB in the background in-case main() is busy with a
   // blocking operation.
   repeating_timer_t timer;
@@ -125,10 +128,11 @@ int main() {
       nullptr, &timer);
 
   const auto start_us = time_us_64();
-  std::optional<FileSystem> fs;
+  bool fs_installed = false;
   while (true) {
-    if (!fs.has_value() && (time_us_64() - start_us > 5'000'000)) {
-      fs.emplace();
+    if (!fs_installed && (time_us_64() - start_us > 5'000'000)) {
+      fs.Install();
+      fs_installed = true;
     }
     tud_task();
     transfer();

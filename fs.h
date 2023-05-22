@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ff.h>
+#include "flash.h"
 
 #include <filesystem>
 #include <memory>
@@ -12,7 +13,7 @@ class Directory;
 
 class FileSystem {
  public:
-  FileSystem();
+  FileSystem(FlashDisk& disk) : disk_(disk) {}
 
   // See http://elm-chan.org/fsw/ff/doc/open.html mode flags
   struct OpenFlags {
@@ -28,7 +29,10 @@ class FileSystem {
   File OpenFile(std::filesystem::path path, const OpenFlags& flags);
   Directory OpenDirectory(std::filesystem::path path);
 
+  void Install();
+
  private:
+  FlashDisk& disk_;
   FATFS fs_;
 };
 

@@ -49,7 +49,7 @@ void LogSpan(std::ostream& s, std::span<const uint8_t> bytes) {
 }
 
 constexpr int kSectorSize = FlashDisk::kSectorSize;
-FlashDisk disk(256);
+FlashDisk* g_disk;
 
 bool fs_initialized = false;
 }  // namespace
@@ -76,8 +76,8 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun) { return fs_initialized; }
 
 void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count,
                          uint16_t* block_size) {
-  *block_count = disk.SectorCount();
-  *block_size = disk.kSectorSize;
+  *block_count = g_disk->SectorCount();
+  *block_size = g_disk->kSectorSize;
 }
 
 bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start,
@@ -89,7 +89,7 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start,
 
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                           void* buffer, uint32_t count) {
-  std::memcpy(buffer, disk.ReadSector(lba).data() + offset, count);
+  std::memcpy(buffer, g_disk->ReadSector(lba).data() + offset, count);
   return count;
 }
 
@@ -125,7 +125,7 @@ DRESULT disk_ioctl(BYTE drive, BYTE command, void* buffer) {
     case CTRL_SYNC:
       return RES_OK;
     case GET_SECTOR_COUNT: {
-      *reinterpret_cast<LBA_t*>(buffer) = disk.SectorCount();
+      *reinterpret_cast<LBA_t*>(buffer) = g_disk->SectorCount();
       return RES_OK;
     }
     case GET_BLOCK_SIZE: {
@@ -144,7 +144,7 @@ DRESULT disk_read(BYTE drive, BYTE* buffer, LBA_t start_sector,
                   UINT sector_count) {
   auto* out = reinterpret_cast<FlashDisk::Sector*>(buffer);
   for (int i = 0; i < sector_count; ++i) {
-    (*out++) = disk.ReadSector(start_sector + i);
+    (*out++) = g_disk->ReadSector(start_sector + i);
   }
   return RES_OK;
 }
@@ -153,7 +153,7 @@ DRESULT disk_write(BYTE drive, const BYTE* buffer, LBA_t start_sector,
                    UINT sector_count) {
   auto* in = reinterpret_cast<const FlashDisk::Sector*>(buffer);
   for (int i = 0; i < sector_count; ++i) {
-    disk.WriteSector(start_sector + i, *(in++));
+    g_disk->WriteSector(start_sector + i, *(in++));
   }
   return RES_OK;
 }
@@ -240,7 +240,7 @@ void ThrowIfError(std::string_view op, FRESULT result) {
 }
 
 void CreateFileSystem() {
-  const LBA_t partition_sizes[] = {disk.SectorCount() - 5};
+  const LBA_t partition_sizes[] = {g_disk->SectorCount() - 5};
   std::array<BYTE, kSectorSize> work_area;
   ThrowIfError("fdisk", f_fdisk(0, partition_sizes, work_area.data()));
   ThrowIfError("mkfs",
@@ -248,7 +248,9 @@ void CreateFileSystem() {
 }
 }  // namespace
 
-FileSystem::FileSystem() {
+void FileSystem::Install() {
+  g_disk = &disk_;
+
   std::cout << "FAT file system initialization start." << std::endl;
   if (FRESULT result = f_mount(&fs_, "", 1); result == FR_NO_FILESYSTEM) {
     std::cout << "No valid FAT filesystem found. Attempting to create it."
