@@ -34,7 +34,7 @@ extern "C" const uint8_t* tud_descriptor_device_cb() {
       .bDeviceProtocol = MISC_PROTOCOL_IAD,
       .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
       .idVendor = 0xCAFE,
-      .idProduct = 0xBEEF,
+      .idProduct = 0xB0BA,
       .bcdDevice = 0x0100,
       .iManufacturer = 1,
       .iProduct = 2,
