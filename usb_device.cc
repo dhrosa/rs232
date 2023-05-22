@@ -1,4 +1,4 @@
-#include "descriptor.h"
+#include "usb_device.h"
 
 #include <algorithm>
 #include <iterator>

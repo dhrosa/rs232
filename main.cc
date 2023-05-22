@@ -17,8 +17,8 @@
 #include <string_view>
 #include <vector>
 
-#include "descriptor.h"
 #include "fs.h"
+#include "usb_device.h"
 
 void tud_cdc_line_coding_cb(uint8_t itf, const cdc_line_coding_t* coding) {
   std::cout << "CDC" << static_cast<int>(itf)
