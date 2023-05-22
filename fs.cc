@@ -4,8 +4,6 @@
 #include <ff.h>
 #include <diskio.h>
 // clang-format on
-#include <hardware/flash.h>
-#include <tusb.h>
 
 #include <algorithm>
 #include <array>
@@ -16,7 +14,6 @@
 #include <iomanip>
 #include <iostream>
 #include <span>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -25,13 +22,6 @@
 #include "flash.h"
 
 namespace {
-std::string ToHex(auto value) {
-  std::stringstream ss;
-  ss << std::setw(2) << std::setfill('0') << std::hex << "0x"
-     << static_cast<int>(value);
-  return ss.str();
-}
-
 void LogSpan(std::ostream& s, std::span<const uint8_t> bytes) {
   auto flags = s.flags();
   s << std::hex << std::setfill('0');
@@ -58,60 +48,6 @@ bool fs_initialized = false;
 // TinyUSB MSC callbacks //
 ///////////////////////////
 
-void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8],
-                        uint8_t product_id[16], uint8_t product_rev[4]) {
-  auto set = [&](uint8_t* dest, std::string_view str) {
-    for (char c : str) {
-      *(dest++) = c;
-    }
-    *(dest++) = 0;
-  };
-
-  set(vendor_id, "DIY");
-  set(product_id, "RS232 Data");
-  set(product_rev, "1.0");
-}
-
-bool tud_msc_test_unit_ready_cb(uint8_t lun) { return fs_initialized; }
-
-void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count,
-                         uint16_t* block_size) {
-  *block_count = g_disk->SectorCount();
-  *block_size = g_disk->kSectorSize;
-}
-
-bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start,
-                           bool load_eject) {
-  std::cout << "MSC Start Stop Unit command: start=" << start << " "
-            << "load_eject=" << load_eject << std::endl;
-  return true;
-}
-
-int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
-                          void* buffer, uint32_t count) {
-  std::memcpy(buffer, g_disk->ReadSector(lba).data() + offset, count);
-  return count;
-}
-
-bool tud_msc_is_writeable_cb(uint8_t lun) { return true; }
-
-int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
-                           uint8_t* buffer, uint32_t count) {
-  return -1;
-}
-
-int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer,
-                        uint16_t count) {
-  const uint8_t op = scsi_cmd[0];
-  switch (op) {
-    case 0x1E:
-      return 0;
-    default:
-      std::cout << "Unsupported SCSI operation: 0x" << ToHex(op) << std::endl;
-      return -1;
-  }
-}
-
 /////////////////////
 // FatFS callbacks //
 /////////////////////
@@ -133,8 +69,8 @@ DRESULT disk_ioctl(BYTE drive, BYTE command, void* buffer) {
       return RES_OK;
     }
     default:
-      std::cout << "Unsupported disk_ioctl command:" << ToHex(command)
-                << std::endl;
+      std::cout << "Unsupported disk_ioctl command:"
+                << static_cast<int>(command) << std::endl;
       return RES_PARERR;
   }
   return RES_OK;

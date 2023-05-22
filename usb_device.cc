@@ -151,19 +151,23 @@ CdcDevice& UsbDevice::AddCdc(std::string_view name) {
       control.interface_number, string_index, control.endpoint_in, 8,
       data.endpoint_out, data.endpoint_in, 64)});
 
-  return cdc_.emplace_back(cdc_.size());
+  return *cdc_.emplace_back(std::make_unique<CdcDevice>(cdc_.size()));
 }
 
-void UsbDevice::AddMsc(std::string_view name) {
+MscDevice& UsbDevice::AddMsc(std::string_view name, FlashDisk& disk) {
   const uint8_t string_index = AddString(name);
   const Interface data = AddInterface();
   // Interface number, string index, EP Out & EP In address, EP size
   ConfigurationAppend(
       {TUD_MSC_DESCRIPTOR(data.interface_number, string_index,
                           data.endpoint_out, data.endpoint_in, 64)});
+
+  return *msc_.emplace_back(std::make_unique<MscDevice>(msc_.size(), disk));
 }
 
 void UsbDevice::Install() {
   g_device = this;
   tud_init(0);
 }
+
+UsbDevice& UsbDevice::Instance() { return *g_device; }

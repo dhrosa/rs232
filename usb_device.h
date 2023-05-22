@@ -5,11 +5,15 @@
 #include <array>
 #include <initializer_list>
 #include <list>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cdc_device.h"
+#include "flash.h"
+#include "msc_device.h"
 
 class UsbDevice {
  public:
@@ -24,7 +28,7 @@ class UsbDevice {
   void SetSerialNumber(std::string_view str);
 
   CdcDevice& AddCdc(std::string_view name);
-  void AddMsc(std::string_view name);
+  MscDevice& AddMsc(std::string_view name, FlashDisk& disk);
 
   std::vector<uint8_t> DeviceDescriptor();
   std::vector<uint8_t> ConfigurationDescriptor();
@@ -32,6 +36,11 @@ class UsbDevice {
 
   // Register this device with the TinyUSB stack.
   void Install();
+
+  static UsbDevice& Instance();
+
+  CdcDevice& Cdc(uint8_t i) { return *cdc_[i]; }
+  MscDevice& Msc(uint8_t i) { return *msc_[i]; }
 
  private:
   struct Interface {
@@ -48,6 +57,7 @@ class UsbDevice {
   uint8_t interface_count_ = 0;
   std::vector<uint8_t> config_descriptor_tail_;
   std::vector<std::string> strings_;
-  
-  std::list<CdcDevice> cdc_;
+
+  std::vector<std::unique_ptr<CdcDevice>> cdc_;
+  std::vector<std::unique_ptr<MscDevice>> msc_;
 };

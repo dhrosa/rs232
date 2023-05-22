@@ -69,6 +69,8 @@ int main() {
     }
   });
 
+  FlashDisk disk(256);
+
   UsbDevice usb;
   usb.SetVendorId(0xCAFE);
   usb.SetProductId(0xB0BA);
@@ -79,7 +81,10 @@ int main() {
 
   usb.AddCdc("Debug Console");
   CdcDevice& data_cdc = usb.AddCdc("RS232 Data");
-  usb.AddMsc("RS232 Storage");
+  MscDevice& msc = usb.AddMsc("RS232 Storage", disk);
+  msc.SetVendorId("DIY");
+  msc.SetProductId("RS232 Storage");
+  msc.SetProductRev("1.0");
 
   usb.Install();
 
@@ -113,7 +118,6 @@ int main() {
       .write = [](char c) { uart_putc(uart0, c); },
   };
 
-  FlashDisk disk(256);
   FileSystem fs(disk);
 
   // Additionally update TinyUSB in the background in-case main() is busy with a
@@ -133,6 +137,7 @@ int main() {
     if (!fs_installed && (time_us_64() - start_us > 5'000'000)) {
       fs.Install();
       fs_installed = true;
+      msc.SetReady();
     }
     tud_task();
     transfer();
