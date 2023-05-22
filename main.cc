@@ -20,48 +20,6 @@
 #include "descriptor.h"
 #include "fs.h"
 
-const uint8_t* tud_descriptor_device_cb() {
-  static const tusb_desc_device_t descriptor = {
-      .bLength = sizeof(tusb_desc_device_t),
-      .bDescriptorType = TUSB_DESC_DEVICE,
-      // USB1.1
-      .bcdUSB = 0x0110,
-      // Use Interface Association Descriptor (IAD) for CDC As required by USB
-      // Specs IAD's subclass must be common class (2) and protocol must be IAD
-      // (1)
-      .bDeviceClass = TUSB_CLASS_MISC,
-      .bDeviceSubClass = MISC_SUBCLASS_COMMON,
-      .bDeviceProtocol = MISC_PROTOCOL_IAD,
-      .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
-      .idVendor = 0xCAFE,
-      .idProduct = 0xB0BA,
-      .bcdDevice = 0x0100,
-      .iManufacturer = 1,
-      .iProduct = 2,
-      .iSerialNumber = 3,
-      .bNumConfigurations = 0x01,
-  };
-
-  return reinterpret_cast<const uint8_t*>(&descriptor);
-}
-
-usb::Configuration usb_config;
-usb::Strings usb_strings;
-
-const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
-  static std::vector<uint8_t> configuration = usb_config.Descriptor();
-  return configuration.data();
-}
-
-const uint16_t* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
-  if (index >= usb_strings.Size()) {
-    return nullptr;
-  }
-  static std::array<uint16_t, 32> descriptor;
-  descriptor = usb_strings.Descriptor(index);
-  return descriptor.data();
-}
-
 void tud_cdc_line_coding_cb(uint8_t itf, const cdc_line_coding_t* coding) {
   std::cout << "CDC" << static_cast<int>(itf)
             << " line coding change: bit_rate=" << coding->bit_rate
@@ -148,20 +106,20 @@ void transfer() {
 }
 
 int main() {
-  // Language (English)
-  usb_strings.Add((const char[]){0x09, 0x04});
-  // Manufacturer
-  usb_strings.Add("DIY");
-  // Product
-  usb_strings.Add("RS232 Bridge");
-  // Serial
-  usb_strings.Add("123456");
+  UsbDevice usb;
+  usb.SetVendorId(0xCAFE);
+  usb.SetProductId(0xB0BA);
+  usb.SetDeviceBcd(0x1234);
+  usb.SetManufacturer("DIY");
+  usb.SetProduct("RS232 Bridge");
+  usb.SetSerialNumber("123456");
 
-  usb::AddCdc(usb_config, usb_strings, "Debug Console");
-  usb::AddCdc(usb_config, usb_strings, "RS232 Data");
-  usb::AddMsc(usb_config, usb_strings, "RS232 Storage");
+  usb.AddCdc("Debug Console");
+  usb.AddCdc("RS232 Data");
+  usb.AddMsc("RS232 Storage");
 
-  tud_init(0);
+  usb.Install();
+
   stdio_usb_init();
   uart_init(uart0, 38'400);
   gpio_set_function(0, GPIO_FUNC_UART);
