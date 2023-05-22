@@ -35,11 +35,11 @@ void FlashDisk::WriteSector(int i, std::span<const std::uint8_t> payload) {
 }
 
 void FlashDisk::CheckInRange(int i) {
-  if (i > 0 && i < sectors_.size()) {
+  if (i >= 0 && i < sectors_.size()) {
     return;
   }
   std::stringstream ss;
-  ss << "Flash sector index " << i << "is outside of valid range [0, "
+  ss << "Flash sector index " << i << " is outside of valid range [0, "
      << sectors_.size() << ")";
   throw std::out_of_range(ss.str());
 }

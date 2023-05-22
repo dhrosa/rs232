@@ -57,6 +57,18 @@ void transfer() {
 }
 
 int main() {
+  std::set_terminate([]() {
+    std::cout << "Unhandled exception: " << std::endl;
+    try {
+      std::rethrow_exception(std::current_exception());
+    } catch (const std::exception& e) {
+      std::cout << e.what() << std::endl;
+    }
+    while (true) {
+      tight_loop_contents();
+    }
+  });
+
   UsbDevice usb;
   usb.SetVendorId(0xCAFE);
   usb.SetProductId(0xB0BA);
