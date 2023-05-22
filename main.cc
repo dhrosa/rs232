@@ -20,7 +20,7 @@
 #include "descriptor.h"
 #include "fs.h"
 
-extern "C" const uint8_t* tud_descriptor_device_cb() {
+const uint8_t* tud_descriptor_device_cb() {
   static const tusb_desc_device_t descriptor = {
       .bLength = sizeof(tusb_desc_device_t),
       .bDescriptorType = TUSB_DESC_DEVICE,
@@ -48,13 +48,12 @@ extern "C" const uint8_t* tud_descriptor_device_cb() {
 usb::Configuration usb_config;
 usb::Strings usb_strings;
 
-extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
+const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
   static std::vector<uint8_t> configuration = usb_config.Descriptor();
   return configuration.data();
 }
 
-extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
-                                                    uint16_t langid) {
+const uint16_t* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
   if (index >= usb_strings.Size()) {
     return nullptr;
   }
@@ -63,9 +62,8 @@ extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
   return descriptor.data();
 }
 
-extern "C" void tud_cdc_line_coding_cb(uint8_t itf,
-                                       const cdc_line_coding_t* coding) {
-  std::cout << "CDC" << itf
+void tud_cdc_line_coding_cb(uint8_t itf, const cdc_line_coding_t* coding) {
+  std::cout << "CDC" << static_cast<int>(itf)
             << " line coding change: bit_rate=" << coding->bit_rate
             << " stop_bits=" << static_cast<int>(coding->stop_bits)
             << " parity=" << static_cast<int>(coding->parity)
@@ -77,14 +75,14 @@ extern "C" void tud_cdc_line_coding_cb(uint8_t itf,
   }
 }
 
-extern "C" void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
-  std::cout << "CDC" << itf << " line state change: dtr=" << dtr
-            << " rts=" << rts << std::endl;
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
+  std::cout << "CDC" << static_cast<int>(itf)
+            << " line state change: dtr=" << dtr << " rts=" << rts << std::endl;
 }
 
-extern "C" void tud_cdc_send_break_cb(uint8_t itf, uint16_t duration_ms) {
-  std::cout << "CDC" << itf << " break request: duration_ms=" << duration_ms
-            << std::endl;
+void tud_cdc_send_break_cb(uint8_t itf, uint16_t duration_ms) {
+  std::cout << "CDC" << static_cast<int>(itf)
+            << " break request: duration_ms=" << duration_ms << std::endl;
 }
 
 struct Device {
@@ -162,13 +160,13 @@ int main() {
   usb::AddCdc(usb_config, usb_strings, "Debug Console");
   usb::AddCdc(usb_config, usb_strings, "RS232 Data");
   usb::AddMsc(usb_config, usb_strings, "RS232 Storage");
-  
+
   tud_init(0);
   stdio_usb_init();
   uart_init(uart0, 38'400);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);
-  
+
   // Additionally update TinyUSB in the background in-case main() is busy with a
   // blocking operation.
   repeating_timer_t timer;
