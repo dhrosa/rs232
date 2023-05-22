@@ -6,6 +6,8 @@ class CdcDevice {
  public:
   CdcDevice(uint8_t id) : id_(id) {}
 
+  bool Connected() { return tud_cdc_n_connected(id_); }
+
   int ReadAvailable() { return tud_cdc_n_available(id_); }
 
   char ReadChar() { return tud_cdc_n_read_char(id_); }

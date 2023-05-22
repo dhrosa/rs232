@@ -79,7 +79,7 @@ int main() {
   usb.SetProduct("RS232 Bridge");
   usb.SetSerialNumber("123456");
 
-  usb.AddCdc("Debug Console");
+  CdcDevice& stdio_cdc = usb.AddCdc("Debug Console");
   CdcDevice& data_cdc = usb.AddCdc("RS232 Data");
   MscDevice& msc = usb.AddMsc("RS232 Storage", disk);
   msc.SetVendorId("DIY");
@@ -87,8 +87,27 @@ int main() {
   msc.SetProductRev("1.0");
 
   usb.Install();
-
   stdio_usb_init();
+
+  // Additionally update TinyUSB in the background in-case main() is busy with a
+  // blocking operation.
+  repeating_timer_t usb_timer;
+  add_repeating_timer_ms(
+      1,
+      [](repeating_timer_t*) {
+        tud_task();
+        return true;
+      },
+      nullptr, &usb_timer);
+
+  while (!stdio_cdc.Connected()) {
+    sleep_ms(10);
+  }
+  std::cout << "====\nStartup" << std::endl;
+  FileSystem fs(disk);
+  fs.Install();
+  msc.SetReady();
+
   uart_init(uart0, 38'400);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);
@@ -118,27 +137,7 @@ int main() {
       .write = [](char c) { uart_putc(uart0, c); },
   };
 
-  FileSystem fs(disk);
-
-  // Additionally update TinyUSB in the background in-case main() is busy with a
-  // blocking operation.
-  repeating_timer_t timer;
-  add_repeating_timer_ms(
-      1,
-      [](repeating_timer_t*) {
-        tud_task();
-        return true;
-      },
-      nullptr, &timer);
-
-  const auto start_us = time_us_64();
-  bool fs_installed = false;
   while (true) {
-    if (!fs_installed && (time_us_64() - start_us > 5'000'000)) {
-      fs.Install();
-      fs_installed = true;
-      msc.SetReady();
-    }
     tud_task();
     transfer();
   }
