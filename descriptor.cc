@@ -5,10 +5,12 @@
 
 namespace usb {
 
-EndpointPair Configuration::AddInterface() {
-  const uint8_t out = interface_count_++;
+Interface Configuration::AddInterface() {
+  const uint8_t interface_number = interface_count_++;
+  // Endpoint 0 is reserved.
+  const uint8_t out = interface_number + 1;
   const uint8_t in = 0x80 | out;
-  return {out, in};
+  return {interface_number, out, in};
 }
 
 void Configuration::Append(std::initializer_list<uint8_t> interface_desc) {
@@ -31,9 +33,6 @@ uint8_t Strings::Add(std::string_view str) {
 }
 
 std::array<uint16_t, 32> Strings::Descriptor(uint8_t index) {
-  if (index >= strings_.size()) {
-    return {};
-  }
   const std::string& str = strings_[index];
   std::array<uint16_t, 32> descriptor;
   // 16-bit header. First byte is the byte count (including the header). Second
@@ -47,6 +46,24 @@ std::array<uint16_t, 32> Strings::Descriptor(uint8_t index) {
     *(c16++) = c;
   }
   return descriptor;
+}
+
+void AddCdc(Configuration& config, Strings& strings, std::string_view name) {
+  const uint8_t string_index = strings.Add(name);
+  const Interface control = config.AddInterface();
+  const Interface data = config.AddInterface();
+  // Interface number, string index, EP notification address and size, EP data
+  // address (out, in) and size.
+  config.Append({TUD_CDC_DESCRIPTOR(control.number, string_index, control.in, 8,
+                                    data.out, data.in, 64)});
+}
+
+void AddMsc(Configuration& config, Strings& strings, std::string_view name) {
+  const uint8_t string_index = strings.Add(name);
+  const Interface data = config.AddInterface();
+  // Interface number, string index, EP Out & EP In address, EP size
+  config.Append(
+      {TUD_MSC_DESCRIPTOR(data.number, string_index, data.out, data.in, 64)});
 }
 
 }  // namespace usb

@@ -17,6 +17,7 @@
 #include <string_view>
 #include <vector>
 
+#include "descriptor.h"
 #include "fs.h"
 
 extern "C" const uint8_t* tud_descriptor_device_cb() {
@@ -44,74 +45,21 @@ extern "C" const uint8_t* tud_descriptor_device_cb() {
   return reinterpret_cast<const uint8_t*>(&descriptor);
 }
 
+usb::Configuration usb_config;
+usb::Strings usb_strings;
+
 extern "C" const uint8_t* tud_descriptor_configuration_cb(uint8_t index) {
-  static std::vector<uint8_t> configuration;
-  auto append = [&](std::initializer_list<uint8_t> descriptor) {
-    configuration.insert(configuration.end(), descriptor);
-  };
-
-  // Each CDC interface needs two interfaces; control (IN) and data (OUT and
-  // IN).
-  const std::array<std::array<uint8_t, 3>, 2> cdc_endpoints{{
-      {0x81, 0x02, 0x82},
-      {0x83, 0x04, 0x84},
-  }};
-  constexpr uint16_t config_length = TUD_CONFIG_DESC_LEN +
-                                     cdc_endpoints.size() * TUD_CDC_DESC_LEN +
-                                     TUD_MSC_DESC_LEN;
-
-  // Config number, interface count, string index, total length, attribute,
-  // power in mA
-  append({TUD_CONFIG_DESCRIPTOR(1, 6, 0, config_length, 0x00, 100)});
-  uint8_t interface = 0;
-  for (const auto [ep_control, ep_out, ep_in] : cdc_endpoints) {
-    // Interface number, string index, EP notification address and size, EP
-    // data
-    // address (out, in) and size.
-    append(
-        {TUD_CDC_DESCRIPTOR(interface, 4, ep_control, 8, ep_out, ep_in, 64)});
-    interface += 2;
-  }
-
-  // MSC endpoint.
-  ++interface;
-  // Interface number, string index, EP Out & EP In address, EP size
-  append({TUD_MSC_DESCRIPTOR(interface, 5, 0x5, 0x85, 64)});
-
+  static std::vector<uint8_t> configuration = usb_config.Descriptor();
   return configuration.data();
 }
 
 extern "C" const uint16_t* tud_descriptor_string_cb(uint8_t index,
                                                     uint16_t langid) {
-  const std::array<std::span<const char>, 6> strings = {
-      // Language (English)
-      (const char[]){0x09, 0x04},
-      // Manufacturer
-      "DIY",
-      // Product
-      "RS232 bridge",
-      // Serial
-      "123456",
-      // CDC interface
-      "DIY CDC",
-      // MSC interface
-      "DIY MSC",
-  };
-  if (index >= strings.size()) {
+  if (index >= usb_strings.Size()) {
     return nullptr;
   }
-  const auto str = strings[index];
   static std::array<uint16_t, 32> descriptor;
-  // 16-bit header. First byte is the byte count (including the header). Second
-  // byte is the string type.
-  const uint16_t length = 2 * str.size() + 2;
-  const uint16_t string_type = TUSB_DESC_STRING;
-  descriptor[0] = (string_type << 8) | length;
-  // Widen each 8-bit value to 16-bit.
-  uint16_t* c16 = &descriptor[1];
-  for (char c : str) {
-    *(c16++) = c;
-  }
+  descriptor = usb_strings.Descriptor(index);
   return descriptor.data();
 }
 
@@ -202,12 +150,25 @@ void transfer() {
 }
 
 int main() {
+  // Language (English)
+  usb_strings.Add((const char[]){0x09, 0x04});
+  // Manufacturer
+  usb_strings.Add("DIY");
+  // Product
+  usb_strings.Add("RS232 Bridge");
+  // Serial
+  usb_strings.Add("123456");
+
+  usb::AddCdc(usb_config, usb_strings, "Debug Console");
+  usb::AddCdc(usb_config, usb_strings, "RS232 Data");
+  usb::AddMsc(usb_config, usb_strings, "RS232 Storage");
+  
   tud_init(0);
   stdio_usb_init();
   uart_init(uart0, 38'400);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);
-
+  
   // Additionally update TinyUSB in the background in-case main() is busy with a
   // blocking operation.
   repeating_timer_t timer;
