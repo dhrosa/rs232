@@ -37,10 +37,3 @@ pico_enable_stdio_usb(rs232 1)
 pico_enable_stdio_uart(rs232 0)
 
 pico_add_extra_outputs(rs232)
-
-
-add_executable(logger logger.cc)
-target_link_libraries(logger PUBLIC pico_stdlib hardware_uart pico_bootsel_via_double_reset)
-pico_enable_stdio_usb(logger 1)
-pico_enable_stdio_uart(logger 0)
-pico_add_extra_outputs(logger)
