@@ -168,6 +168,14 @@ MscDevice& UsbDevice::AddMsc(std::string_view name, FlashDisk& disk) {
 void UsbDevice::Install() {
   g_device = this;
   tud_init(0);
+
+  add_repeating_timer_ms(
+      1,
+      [](repeating_timer_t*) {
+        tud_task();
+        return true;
+      },
+      nullptr, &timer_);
 }
 
 UsbDevice& UsbDevice::Instance() { return *g_device; }

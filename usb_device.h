@@ -1,5 +1,6 @@
 #pragma once
 
+#include <pico/time.h>
 #include <tusb.h>
 
 #include <array>
@@ -42,6 +43,8 @@ class UsbDevice {
   CdcDevice& Cdc(uint8_t i) { return *cdc_[i]; }
   MscDevice& Msc(uint8_t i) { return *msc_[i]; }
 
+  void Task() { tud_task(); }
+
  private:
   struct Interface {
     uint8_t interface_number;
@@ -60,4 +63,6 @@ class UsbDevice {
 
   std::vector<std::unique_ptr<CdcDevice>> cdc_;
   std::vector<std::unique_ptr<MscDevice>> msc_;
+
+  repeating_timer_t timer_;
 };

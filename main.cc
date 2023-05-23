@@ -2,8 +2,6 @@
 #include <hardware/timer.h>
 #include <hardware/uart.h>
 #include <pico/stdlib.h>
-#include <pico/time.h>
-#include <tusb.h>
 
 #include <iostream>
 
@@ -11,18 +9,20 @@
 #include "fs.h"
 #include "usb_device.h"
 
+void TerminateHandler() {
+  std::cout << "Unhandled exception: " << std::endl;
+  try {
+    std::rethrow_exception(std::current_exception());
+  } catch (const std::exception& e) {
+    std::cout << e.what() << std::endl;
+  }
+  while (true) {
+    tight_loop_contents();
+  }
+}
+
 int main() {
-  std::set_terminate([]() {
-    std::cout << "Unhandled exception: " << std::endl;
-    try {
-      std::rethrow_exception(std::current_exception());
-    } catch (const std::exception& e) {
-      std::cout << e.what() << std::endl;
-    }
-    while (true) {
-      tight_loop_contents();
-    }
-  });
+  std::set_terminate(TerminateHandler);
 
   FlashDisk disk(256);
 
@@ -44,17 +44,6 @@ int main() {
   usb.Install();
   stdio_usb_init();
 
-  // Additionally update TinyUSB in the background in-case main() is busy with a
-  // blocking operation.
-  repeating_timer_t usb_timer;
-  add_repeating_timer_ms(
-      1,
-      [](repeating_timer_t*) {
-        tud_task();
-        return true;
-      },
-      nullptr, &usb_timer);
-
   while (!stdio_cdc.Connected()) {
     sleep_ms(10);
   }
@@ -70,7 +59,7 @@ int main() {
   Bridge bridge(data_cdc, *uart0);
 
   while (true) {
-    tud_task();
+    usb.Task();
     bridge.Task();
   }
 }
