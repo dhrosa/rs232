@@ -1,3 +1,4 @@
+#include <cxxabi.h>
 #include <hardware/gpio.h>
 #include <hardware/timer.h>
 #include <hardware/uart.h>
@@ -9,20 +10,8 @@
 #include "fs.h"
 #include "usb_device.h"
 
-void TerminateHandler() {
-  std::cout << "Unhandled exception: " << std::endl;
-  try {
-    std::rethrow_exception(std::current_exception());
-  } catch (const std::exception& e) {
-    std::cout << e.what() << std::endl;
-  }
-  while (true) {
-    tight_loop_contents();
-  }
-}
-
 int main() {
-  std::set_terminate(TerminateHandler);
+  std::set_terminate(__gnu_cxx::__verbose_terminate_handler);
 
   FlashDisk disk(256);
 
