@@ -20,7 +20,7 @@ FetchContent_Declare(fatfs_upstream
 FetchContent_MakeAvailable(fatfs_upstream)
 add_subdirectory(fatfs)
 
-add_executable(rs232 main.cc fs.cc usb_device.cc msc_device.cc flash.cc)
+add_executable(rs232 main.cc fs.cc usb_device.cc msc_device.cc flash.cc bridge.cc)
 target_include_directories(rs232 PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(
   rs232
