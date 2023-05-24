@@ -7,12 +7,14 @@
 #include <stdexcept>
 #include <string>
 
-FlashDisk::FlashDisk(int sector_count) {
-  const std::span<const Sector> flash(reinterpret_cast<const Sector*>(XIP_BASE),
-                                      PICO_FLASH_SIZE_BYTES / kSectorSize);
+namespace {
+const auto flash =
+    std::span(reinterpret_cast<const FlashDisk::Sector*>(XIP_BASE),
+              PICO_FLASH_SIZE_BYTES / FlashDisk::kSectorSize);
 
-  sectors_ = flash.last(sector_count);
-}
+}  // namespace
+
+FlashDisk::FlashDisk(int sector_count) { sectors_ = flash.last(sector_count); }
 
 const FlashDisk::Sector& FlashDisk::ReadSector(int i) {
   CheckInRange(i);
@@ -27,8 +29,8 @@ void FlashDisk::WriteSector(int i, std::span<const std::uint8_t> payload) {
        << " vs " << kSectorSize;
     throw std::length_error(ss.str());
   }
+  const uint32_t offset = (sectors_.data() - flash.data() + i) * kSectorSize;
   const auto interrupts = save_and_disable_interrupts();
-  const uint32_t offset = i * kSectorSize;
   flash_range_erase(offset, kSectorSize);
   flash_range_program(offset, payload.data(), kSectorSize);
   restore_interrupts(interrupts);
