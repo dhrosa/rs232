@@ -41,7 +41,7 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start,
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                           void* buffer, uint32_t count) {
   MscDevice& device = UsbDevice::Instance().Msc(lun);
-  std::memcpy(buffer, device.Disk().ReadSector(lba).data() + offset, count);
+  std::memcpy(buffer, device.Disk().ReadSector(lba) + offset, count);
   return count;
 }
 

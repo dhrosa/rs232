@@ -80,7 +80,7 @@ DRESULT disk_read(BYTE drive, BYTE* buffer, LBA_t start_sector,
                   UINT sector_count) {
   auto* out = reinterpret_cast<FlashDisk::Sector*>(buffer);
   for (int i = 0; i < sector_count; ++i) {
-    (*out++) = g_disk->ReadSector(start_sector + i);
+    std::memcpy(*out++, g_disk->ReadSector(start_sector + i), kSectorSize);
   }
   return RES_OK;
 }
