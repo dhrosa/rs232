@@ -49,6 +49,8 @@ class File {
 
   void Seek(int location);
 
+  int Size();
+
   // buffer: Buffer to read data into. Number of bytes read is the size of this
   // buffer.
   //
@@ -56,8 +58,13 @@ class File {
   // may be smaller than the input if EOF was reached.
   std::span<std::byte> Read(std::span<std::byte> buffer);
 
+  std::string ReadAll();
+
   // Returns the number of bytes actually written.
   int Write(std::span<const std::byte> buffer);
+
+  // Returns the number of bytes actually written.
+  int Write(std::string_view str);
 
   void Sync();
 

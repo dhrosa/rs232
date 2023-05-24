@@ -6,10 +6,11 @@
 #include <string_view>
 
 #include "cdc_device.h"
+#include "fs.h"
 
 class Bridge {
  public:
-  Bridge(CdcDevice& usb, uart_inst_t& uart) : usb_(usb), uart_(uart) {}
+  Bridge(CdcDevice& usb, uart_inst_t& uart, FileSystem& fs);
 
   void Task();
 
@@ -26,6 +27,7 @@ class Bridge {
 
   CdcDevice& usb_;
   uart_inst_t& uart_;
+  FileSystem& fs_;
 
   int write_index_ = 0;
 };

@@ -1,9 +1,40 @@
 #include "bridge.h"
 
+#include <charconv>
 #include <iomanip>
 #include <ios>
 #include <iostream>
+#include <regex>
 #include <sstream>
+
+namespace {
+int ParseNonce(std::string_view str) {
+  if (str.empty()) {
+    return -1;
+  }
+  int value;
+  const std::from_chars_result result =
+      std::from_chars(str.begin(), str.end(), value);
+  if (result.ptr != str.end()) {
+    throw std::system_error(std::make_error_code(result.ec),
+                            "Corrupted index file contents.");
+  }
+  return value;
+}
+}  // namespace
+
+Bridge::Bridge(CdcDevice& usb, uart_inst_t& uart, FileSystem& fs)
+    : usb_(usb), uart_(uart), fs_(fs) {
+  // Use a new nonce for each run, keeping track of the previous nonce in a
+  // file.
+  File nonce_file = fs_.OpenFile(
+      "/nonce.txt", {.read = true, .write = true, .create_always = true});
+  const int previous_nonce = ParseNonce(nonce_file.ReadAll());
+  const int nonce = previous_nonce + 1;
+  std::cout << "Nonce: " << nonce << std::endl;
+  nonce_file.Seek(0);
+  nonce_file.Write(std::to_string(nonce));
+}
 
 std::string_view Bridge::Name(Device device) {
   if (device == Device::kUsb) {

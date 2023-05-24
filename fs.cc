@@ -238,6 +238,10 @@ void File::Close() {
   ThrowIfError("close", f_close(std::exchange(fat_file_, nullptr).get()));
 }
 
+int File::Size() {
+  return f_size(fat_file_.get());
+}
+
 int File::Tell() { return f_tell(fat_file_.get()); }
 
 void File::Seek(int location) {
@@ -251,11 +255,21 @@ std::span<std::byte> File::Read(std::span<std::byte> buffer) {
   return buffer.subspan(bytes_read);
 }
 
+std::string File::ReadAll() {
+  std::string str(Size(), 0);
+  Read(std::as_writable_bytes(std::span(str)));
+  return str;
+}
+
 int File::Write(std::span<const std::byte> buffer) {
   UINT bytes_written;
   ThrowIfError("write", f_write(fat_file_.get(), buffer.data(), buffer.size(),
                                 &bytes_written));
   return bytes_written;
+}
+
+int File::Write(std::string_view str) {
+  return Write(std::as_bytes(std::span(str)));
 }
 
 void File::Sync() { ThrowIfError("sync", f_sync(fat_file_.get())); }

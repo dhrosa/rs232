@@ -45,7 +45,7 @@ int main() {
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);
 
-  Bridge bridge(data_cdc, *uart0);
+  Bridge bridge(data_cdc, *uart0, fs);
 
   while (true) {
     usb.Task();
