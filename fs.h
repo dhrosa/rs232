@@ -38,6 +38,10 @@ class FileSystem {
 
 class File {
  public:
+  // Only valid operation a default-constructed object is closing and
+  // destructing.
+  File() = default;
+
   ~File();
 
   File(File&& other) = default;
@@ -70,13 +74,14 @@ class File {
 
  private:
   friend class FileSystem;
-  File() = default;
-
   std::unique_ptr<FIL> fat_file_;
 };
 
 class Directory {
  public:
+  // Only valid operation a default-constructed object is closing and
+  // destructing.
+  Directory() = default;
   ~Directory();
 
   Directory(Directory&&) = default;
@@ -91,6 +96,5 @@ class Directory {
 
  private:
   friend class FileSystem;
-  Directory() = default;
   std::unique_ptr<DIR> fat_dir_;
 };
