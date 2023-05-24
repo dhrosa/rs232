@@ -21,7 +21,7 @@ const FlashDisk::Sector& FlashDisk::ReadSector(int i) {
   return sectors_[i];
 }
 
-void FlashDisk::WriteSector(int i, std::span<const std::uint8_t> payload) {
+void FlashDisk::WriteSector(int i, std::span<const std::byte> payload) {
   CheckInRange(i);
   if (payload.size() != kSectorSize) {
     std::stringstream ss;
@@ -32,7 +32,8 @@ void FlashDisk::WriteSector(int i, std::span<const std::uint8_t> payload) {
   const uint32_t offset = (sectors_.data() - flash.data() + i) * kSectorSize;
   const auto interrupts = save_and_disable_interrupts();
   flash_range_erase(offset, kSectorSize);
-  flash_range_program(offset, payload.data(), kSectorSize);
+  flash_range_program(offset, reinterpret_cast<const uint8_t*>(payload.data()),
+                      kSectorSize);
   restore_interrupts(interrupts);
 }
 
