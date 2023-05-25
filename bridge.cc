@@ -17,7 +17,7 @@ int ParseNonce(std::string_view str) {
       std::from_chars(str.begin(), str.end(), value);
   if (result.ptr != str.end()) {
     throw std::system_error(std::make_error_code(result.ec),
-                            "Corrupted index file contents.");
+                            "Corrupted nonce file contents.");
   }
   return value;
 }
@@ -28,7 +28,7 @@ Bridge::Bridge(CdcDevice& usb, uart_inst_t& uart, FileSystem& fs)
   // Use a new nonce for each run, keeping track of the previous nonce in a
   // file.
   File nonce_file = fs_.OpenFile(
-      "/nonce.txt", {.read = true, .write = true, .create_always = true});
+      "/nonce.txt", {.read = true, .write = true, .open_always = true});
   const int previous_nonce = ParseNonce(nonce_file.ReadAll());
   const int nonce = previous_nonce + 1;
   std::cout << "Nonce: " << nonce << std::endl;

@@ -40,6 +40,10 @@ void FlashDisk::WriteSector(int i, std::span<const std::byte> payload) {
   // Find the page-aligned subspan of the source that doesn't match.
   const std::span<const std::byte> src_mismatch =
       src.subspan((unaligned_mismatch_offset / kPageSize) * kPageSize);
+  if (src_mismatch.empty()) {
+    // Source and destination already match; no write needed at all.
+    return;
+  }
 
   // Offset from start of flash.
   const uint32_t offset =
@@ -47,6 +51,7 @@ void FlashDisk::WriteSector(int i, std::span<const std::byte> payload) {
       (sectors_.data() - flash.data() + i) * kSectorSize +
       // Offset from start of sector to first mismatched page.
       (src_mismatch.data() - src.data());
+
   const auto interrupts = save_and_disable_interrupts();
   if (src_mismatch.data() == src.data()) {
     // All pages differ between source and destination; we need to erase the
