@@ -7,8 +7,13 @@
 
 class FlashDisk {
  public:
+  // Flash must be erased on sector boundaries.
   static constexpr int kSectorSize = FLASH_SECTOR_SIZE;
   using Sector = std::byte[kSectorSize];
+
+  // Flash must be written to on page boundaries, which are smaller than
+  // sectors.
+  static constexpr unsigned kPageSize = FLASH_PAGE_SIZE;
 
   // Uses the end of flash memory as storage.
   FlashDisk(int sector_count);

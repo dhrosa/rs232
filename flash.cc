@@ -3,15 +3,15 @@
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 
+#include <algorithm>
+#include <bit>
 #include <sstream>
 #include <stdexcept>
-#include <string>
 
 namespace {
 const auto flash =
     std::span(reinterpret_cast<const FlashDisk::Sector*>(XIP_BASE),
               PICO_FLASH_SIZE_BYTES / FlashDisk::kSectorSize);
-
 }  // namespace
 
 FlashDisk::FlashDisk(int sector_count) { sectors_ = flash.last(sector_count); }
@@ -29,11 +29,35 @@ void FlashDisk::WriteSector(int i, std::span<const std::byte> payload) {
        << " vs " << kSectorSize;
     throw std::length_error(ss.str());
   }
-  const uint32_t offset = (sectors_.data() - flash.data() + i) * kSectorSize;
+  const Sector& dest = sectors_[i];
+  const std::span<const std::byte, kSectorSize> src(payload.data(),
+                                                    kSectorSize);
+
+  // See how much of the source already matches the destination to try to avoid
+  // an unneccessary sector erase.
+  const uint32_t unaligned_mismatch_offset =
+      std::ranges::mismatch(dest, src).in2 - src.begin();
+  // Find the page-aligned subspan of the source that doesn't match.
+  const std::span<const std::byte> src_mismatch =
+      src.subspan((unaligned_mismatch_offset / kPageSize) * kPageSize);
+
+  // Offset from start of flash.
+  const uint32_t offset =
+      // Offset from start of flash to start of sector
+      (sectors_.data() - flash.data() + i) * kSectorSize +
+      // Offset from start of sector to first mismatched page.
+      (src_mismatch.data() - src.data());
   const auto interrupts = save_and_disable_interrupts();
-  flash_range_erase(offset, kSectorSize);
-  flash_range_program(offset, reinterpret_cast<const uint8_t*>(payload.data()),
-                      kSectorSize);
+  if (src_mismatch.data() == src.data()) {
+    // All pages differ between source and destination; we need to erase the
+    // entire sector. In this case, the computed offset will already be aligned
+    // to a sector boundary.
+    flash_range_erase(offset, kSectorSize);
+  }
+  // Write all differing pages.
+  flash_range_program(offset,
+                      reinterpret_cast<const uint8_t*>(src_mismatch.data()),
+                      src_mismatch.size());
   restore_interrupts(interrupts);
 }
 
