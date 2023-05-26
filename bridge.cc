@@ -1,5 +1,7 @@
 #include "bridge.h"
 
+#include <fmt/core.h>
+
 #include <charconv>
 #include <iomanip>
 #include <ios>
@@ -78,10 +80,7 @@ void Bridge::Task() {
     const char c = *oc;
 
     // Log the transfer
-    std::stringstream value_str;
-    value_str << "0x" << std::hex << std::setw(2) << std::setfill('0')
-              << std::uppercase << static_cast<int>(c);
-    std::cout << write_index_ << " " << Name(device) << ": " << value_str.view()
+    std::cout << fmt::format("{} {}: {:#04x}", write_index_, Name(device), c)
               << std::endl;
     ++write_index_;
 

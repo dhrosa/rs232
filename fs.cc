@@ -5,6 +5,10 @@
 #include <diskio.h>
 // clang-format on
 
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+#include <fmt/ranges.h>
+
 #include <algorithm>
 #include <array>
 #include <bitset>
@@ -13,6 +17,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -22,22 +27,6 @@
 #include "flash.h"
 
 namespace {
-void LogSpan(std::ostream& s, std::span<const uint8_t> bytes) {
-  auto flags = s.flags();
-  s << std::hex << std::setfill('0');
-  for (int i = 0; i < bytes.size(); ++i) {
-    if (i % 32 == 0) {
-      s << "\n" << std::setw(4) << i << ": ";
-    }
-    if (i % 2 == 0) {
-      s << " ";
-    }
-    s << std::setw(2) << static_cast<int>(bytes[i]);
-  }
-  s << std::endl;
-  s.flags(flags);
-}
-
 constexpr int kSectorSize = FlashDisk::kSectorSize;
 FlashDisk* g_disk;
 
@@ -69,8 +58,8 @@ DRESULT disk_ioctl(BYTE drive, BYTE command, void* buffer) {
       return RES_OK;
     }
     default:
-      std::cout << "Unsupported disk_ioctl command:"
-                << static_cast<int>(command) << std::endl;
+      std::cout << fmt::format("Unsupported disk_ioctl command: {}", command)
+                << std::endl;
       return RES_PARERR;
   }
   return RES_OK;
@@ -168,11 +157,9 @@ void ThrowIfError(std::string_view op, FRESULT result) {
     return;
   }
   const Error error = ToError(result);
-  std::stringstream what;
-  what << op << " error " << error.name << "(" << static_cast<int>(result)
-       << ")";
-  throw std::filesystem::filesystem_error(what.str(),
-                                          std::make_error_code(error.errc));
+  throw std::filesystem::filesystem_error(
+      fmt::format("{} error: {} ({})", op, error.name, fmt::underlying(result)),
+      std::make_error_code(error.errc));
 }
 
 void CreateFileSystem() {

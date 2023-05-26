@@ -1,11 +1,10 @@
 #include "flash.h"
 
+#include <fmt/core.h>
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 
 #include <algorithm>
-#include <bit>
-#include <sstream>
 #include <stdexcept>
 
 namespace {
@@ -24,10 +23,9 @@ const FlashDisk::Sector& FlashDisk::ReadSector(int i) {
 void FlashDisk::WriteSector(int i, std::span<const std::byte> payload) {
   CheckInRange(i);
   if (payload.size() != kSectorSize) {
-    std::stringstream ss;
-    ss << "Payload size does not match flash sector size: " << payload.size()
-       << " vs " << kSectorSize;
-    throw std::length_error(ss.str());
+    throw std::length_error(
+        fmt::format("Payload size does not match flash sector size: {} vs {}",
+                    payload.size(), kSectorSize));
   }
   const Sector& dest = sectors_[i];
   const std::span<const std::byte, kSectorSize> src(payload.data(),
@@ -70,8 +68,7 @@ void FlashDisk::CheckInRange(int i) {
   if (i >= 0 && i < sectors_.size()) {
     return;
   }
-  std::stringstream ss;
-  ss << "Flash sector index " << i << " is outside of valid range [0, "
-     << sectors_.size() << ")";
-  throw std::out_of_range(ss.str());
+  throw std::out_of_range(
+      fmt::format("Flash sector index {} is out of valid range [0, {})", i,
+                  sectors_.size()));
 }

@@ -1,5 +1,7 @@
 #include "msc_device.h"
 
+#include <fmt/core.h>
+
 #include <cstring>
 #include <iostream>
 
@@ -33,8 +35,10 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count,
 
 bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start,
                            bool load_eject) {
-  std::cout << "MSC Start Stop Unit command: start=" << start << " "
-            << "load_eject=" << load_eject << std::endl;
+  std::cout << fmt::format(
+                   "MSC Start Stop Unit command: start={} load_eject={}", start,
+                   load_eject)
+            << std::endl;
   return true;
 }
 
@@ -59,7 +63,7 @@ int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer,
     case 0x1E:
       return 0;
     default:
-      std::cout << "Unsupported SCSI operation: " << static_cast<int>(op)
+      std::cout << fmt::format("Unsupported SCSI operation: {}", op)
                 << std::endl;
       return -1;
   }

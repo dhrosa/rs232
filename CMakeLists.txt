@@ -21,6 +21,12 @@ FetchContent_Declare(fatfs_upstream
 FetchContent_MakeAvailable(fatfs_upstream)
 add_subdirectory(fatfs)
 
+FetchContent_Declare(fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG 10.0.0
+)
+FetchContent_MakeAvailable(fmt)
+
 add_executable(rs232 main.cc fs.cc usb_device.cc msc_device.cc flash.cc bridge.cc)
 target_include_directories(rs232 PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(
@@ -32,6 +38,7 @@ target_link_libraries(
   pico_bootsel_via_double_reset
   tinyusb_board
   tinyusb_device
+  fmt::fmt
   fatfs
 )
 pico_enable_stdio_usb(rs232 1)
